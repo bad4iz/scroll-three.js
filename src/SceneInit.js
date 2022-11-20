@@ -4,32 +4,37 @@ import {
   WebGLRenderer,
   AxesHelper,
   DirectionalLight,
+  MeshStandardMaterial,
+  Color,
+  CubeTextureLoader,
+  PCFShadowMap,
+  SpotLight,
 } from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 
 export class SceneInit {
-  constructor(id) {
+  constructor(id, { height, width, aspect: aspect }) {
     const canvas = document.getElementById(id);
-    this._width = canvas?.width || window.innerWidth;
-    this._height = canvas?.height || window.innerHeight;
+    this._width = width || canvas?.width || window.innerWidth;
+    this._height = height || canvas?.height || window.innerHeight;
 
+    this._aspect = aspect || canvas?.width / canvas?.height;
     this._scene = new Scene();
-    this._camera = new PerspectiveCamera(
-      25,
-      this._width / this._height,
-      0.1,
-      1000
-    );
+    this._camera = new PerspectiveCamera(25, this._aspect, 0.1, 1000);
     this._animationFns = new Map();
     this._resizeFns = new Map();
 
     this._renderer = new WebGLRenderer({ canvas });
     // this._renderer = new WebGLRenderer();
     this._renderer.setSize(this._width, this._height);
-    document.body.appendChild(this._renderer.domElement);
-    this._controls = new OrbitControls(this._camera, this._renderer.domElement);
+    this._renderer.shadowMapEnabled = true;
+    this._renderer.shadowMapSoft = true;
+    this._renderer.shadowMapType = PCFShadowMap;
+    // document.body.appendChild(this._renderer.domElement);
+    // this._controls = new OrbitControls(this._camera, this._renderer.domElement);
 
-    this._camera.position.z = 2;
+    this._camera.position.z = 2.25;
+    this._scene.background = new Color(0xffffff);
 
     window.addEventListener("resize", () => this.onWindowResize(), false);
   }
@@ -39,7 +44,7 @@ export class SceneInit {
 
     requestAnimationFrame(() => this.animate());
     this.render();
-    this._controls.update();
+    // this._controls.update();
   }
 
   add(object) {
@@ -47,7 +52,7 @@ export class SceneInit {
   }
 
   onWindowResize() {
-    this._camera.aspect = this._width / this._height;
+    this._camera.aspect = this._aspect;
     this._renderer.setSize(this._width, this._height);
     this._resizeFns.forEach((fn) => fn());
 

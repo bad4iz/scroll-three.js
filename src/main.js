@@ -1,20 +1,27 @@
+import "./style.css";
 import { SceneInit } from "./SceneInit.js";
 import * as THREE from "three";
 import gsap from "gsap";
-const scene = new SceneInit("myThreeJsCanvas");
-scene.animate();
-scene.addAxesHelper();
+import { toPng, toJpeg, toBlob, toPixelData, toSvg } from "html-to-image";
+import html2canvas from "html2canvas";
 
-const planeGeometry = new THREE.PlaneGeometry(1.56, 1, 1, 1);
+const scene = new SceneInit("myThreeJsCanvas", {
+  // height: 1216,
+  // width: 728,
+  // aspect: 1216 / 728,
+});
+scene.animate();
+// scene.addAxesHelper();
+const planeGeometry = new THREE.PlaneGeometry(1.6, 1, 100, 100);
 
 const loader = new THREE.TextureLoader();
-const gallery = [
-  "/assets/i_1.jpg",
-  "/assets/i_2.png",
-  "/assets/i_3.jpg",
-  "/assets/i_4.jpg",
-  "/assets/i_5.jpg",
-];
+const content = document.querySelector("#three-js-carousel");
+const gallery = [...content.querySelectorAll(".carousel-three-js__img")].map(
+  (item) => {
+    return item.src;
+  }
+);
+const textArr = [];
 
 const uniforms = {
   time: { type: "f", value: 0 },
@@ -26,11 +33,37 @@ const uniforms = {
   texture2: {
     value: loader.load(gallery[1]),
   },
-  pixels: { type: "v2", value: new THREE.Vector2(scene._width, scene._height) },
+  pixels: { type: "v2", value: new THREE.Vector2(1136, 728) },
   uvRate1: {
     value: new THREE.Vector2(1, 1),
   },
 };
+
+const planeText = new THREE.PlaneGeometry(0.55 * 1.3, 0.424 * 1.18, 1, 1);
+
+const materialText = new THREE.MeshBasicMaterial({
+  map: loader.load(textArr[0]),
+});
+
+const planeMeshText = new THREE.Mesh(planeText, materialText);
+planeMeshText.position.x = -0.47;
+planeMeshText.position.z = 0.01;
+scene.add(planeMeshText);
+
+[...content.querySelectorAll(".carousel-three-js-text")].map((item, idx) => {
+  toPng(item)
+    .then(function (dataUrl) {
+      const img = new Image();
+      img.src = dataUrl;
+      img.addEventListener("load", function (event) {
+        textArr[idx] = img.src;
+        planeMeshText.material.map = loader.load(textArr[0]);
+      });
+    })
+    .catch(function (error) {
+      console.error("oops, something went wrong!", error);
+    });
+});
 
 const planeMaterialShader = new THREE.ShaderMaterial({
   side: THREE.DoubleSide,
@@ -83,7 +116,7 @@ const planeMaterialShader = new THREE.ShaderMaterial({
     void main(void) {
         vec2 uv = gl_FragCoord.xy/pixels.xy;
         float p = fract(progress);
-       float delayValue = p*7. - uv.y*2. + uv.x - 2.;
+        float delayValue = p*7. - uv.y*2. + uv.x - 2.;
         delayValue = clamp(delayValue,0.0,1.0);
         
         vec2 translateValue = p + delayValue*accel;
@@ -101,6 +134,7 @@ const planeMaterialShader = new THREE.ShaderMaterial({
 
         vec4 rgba = mix(rgba1,rgba2,delayValue);
         gl_FragColor = rgba;
+        // gl_FragColor = vec4(0.0, 1.0, 0.0,1.0);
     }
     `,
   // wireframe: true,
@@ -108,75 +142,80 @@ const planeMaterialShader = new THREE.ShaderMaterial({
 
 const planeMesh = new THREE.Mesh(planeGeometry, planeMaterialShader);
 scene.add(planeMesh);
-scene.setResizeFns("planeCamera", () => {
-  const dist = scene._camera.position.z - planeMesh.position.z;
-  const height = 1;
-  scene._camera.fov = 2 * (180 / Math.PI) * Math.atan(height / (2 * dist));
+planeMesh.position.x = 0.07;
+
+let tl = gsap.timeline({ defaults: { duration: 1 } });
+let tl2 = gsap.timeline({
+  defaults: { duration: 1, ease: "elastic.out(1, 0.3)" },
 });
 
-scene.setAnimation("plane", () => {
-  const dist = scene._camera.position.z - planeMesh.position.z;
-  const height = 1;
-  scene._camera.fov = 2 * (180 / Math.PI) * Math.atan(height / (2 * dist));
-  scene._camera.updateProjectionMatrix();
+const itemsCarousel = [
+  ...document.querySelectorAll(".carousel-three-js__item"),
+];
 
-  // uniforms.pixels: {type: 'v2',value: new THREE.Vector2(scene._width, scene._height)}
-});
-
-// let tl = gsap.timeline({ defaults: { duration: 2 } });
-// document.body.addEventListener("click", () => {
-//   if (document.body.classList.contains("done")) {
-//     tl.to(planeMaterialShader.uniforms.progress, {
-//       value: 0.0,
-//     });
-//     document.body.classList.remove("done");
-//   } else {
-//     tl.to(planeMaterialShader.uniforms.progress, {
-//       value: 1.0,
-//     });
-//     document.body.classList.add("done");
-//   }
-// });
-
-/// SCROLL MAGIC
-let speed = 0;
-let position = 0;
-document.addEventListener("wheel", function (event) {
-  speed += event.deltaY * 0.0003;
-});
-
-function raf() {
-  position += speed;
-  speed *= 0.7;
-
-  let i = Math.round(position);
-  let dif = i - position;
-
-  // dif = dif < 0 ? Math.max(dif, -0.02) : Math.max(dif, +0.03);
-
-  position += dif * 0.035;
-  if (Math.abs(i - position) < 0.001) {
-    position = i;
-  }
-
-  // tl1.set(".dot", { y: position * 200 });
-  uniforms.progress.value = position;
-
-  const curslide = Math.abs(
-    (Math.floor(position) - 1 + gallery.length) % gallery.length
-  );
-  let nextslide = Math.abs(
-    (((Math.floor(position) + 1) % gallery.length) - 1 + gallery.length) %
-      gallery.length
+let position = 2;
+document.body.addEventListener("click", () => {
+  const curSlide = Math.abs((position - 1 + gallery.length) % gallery.length);
+  let nextSlide = Math.abs(
+    (((position + 1) % gallery.length) - 1 + gallery.length) % gallery.length
   );
 
-  if (nextslide === curslide) {
-    nextslide--;
+  if (nextSlide === curSlide) {
+    nextSlide--;
   }
 
-  uniforms.texture1.value = loader.load(gallery[curslide]);
-  uniforms.texture2.value = loader.load(gallery[nextslide]);
+  const curItemCarousel = itemsCarousel[curSlide - 1];
+  const nextItemCarousel = itemsCarousel[curSlide];
+  tl
+    //     .to("#three-js-carousel", {
+    //   opacity: 0,
+    //   duration: 0.3,
+    // })
+    .to(planeMaterialShader.uniforms.progress, {
+      value: 1.0,
+    })
+    // .to(curItemCarousel, {
+    //   opacity: 0,
+    //   duration: 0,
+    // })
+    // .to(nextItemCarousel, {
+    //   opacity: 1,
+    //   duration: 0,
+    // })
+    .to(planeMaterialShader.uniforms.texture1, 0.0, {
+      value: loader.load(gallery[curSlide]),
+    })
+    .to(planeMaterialShader.uniforms.texture2, 0, {
+      value: loader.load(gallery[nextSlide]),
+    })
+    .to(planeMaterialShader.uniforms.progress, 0.0, {
+      value: 0.0,
+    });
 
-  window.requestAnimationFrame(raf);
-}
-raf();
+  tl2
+    .to(planeMeshText.position, {
+      y: 1,
+    })
+    .to(planeMeshText.material, {
+      map: loader.load(textArr[curSlide]),
+      duration: 0.1,
+    })
+    .to(planeMeshText.material, {
+      needsUpdate: true,
+      duration: 0.1,
+    })
+    .to(planeMeshText.position, {
+      y: 0,
+    });
+  // .to(nextItemCarousel, {
+  //   opacity: 1,
+  //   duration: 0,
+  // })
+  // .to("#three-js-carousel", {
+  //   opacity: 1,
+  //   duration: 0.3,
+  //   ease: "power1.out",
+  // });
+
+  position++;
+});
